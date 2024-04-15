@@ -26,9 +26,10 @@ setup(
             'r2occupancy = auto_nav.r2occupancy:main',
             'r2occupancy2 = auto_nav.r2occupancy2:main',
             'r2auto_nav = auto_nav.r2auto_nav:main',
-            'botcurrentpose = auto_nav.botcurrentpose:main',
-            'botmapper = auto_nav.botmapper:main',
-            'waypointnav = auto_nav.waypointnav:main'
+            'behavior = auto_nav.botbehavior:main',
+            'currentpose = auto_nav.botcurrentpose:main',
+            'mapperplanner = auto_nav.botmapperplanner:main',
+            'controller = auto_nav.botcontroller:main'
         ],
     },
 )

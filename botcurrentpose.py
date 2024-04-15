@@ -28,7 +28,10 @@ class BotCurrentPose(Node):
         
         # A timer that periodically publishes the pose of the robot every 1 second
         self.timer = self.create_timer(1.0, self.publish_pose)
-
+    
+    '''
+    Publishes
+    '''
     def publish_pose(self):
         # Get the robot's position in the map frame
         
@@ -65,11 +68,14 @@ class BotCurrentPose(Node):
 
         except (LookupException, ConnectivityException, ExtrapolationException) as e:
             self.get_logger().error(f'Failed to get robot pose: {e}')
-            
+    
+    '''
+    Topics
+    '''
     def init_topics(self):
         self.map_subscription = self.create_subscription(
             OccupancyGrid,
-            'map',
+            '/map',
             self.map_callback,
             qos_profile_sensor_data
         )
@@ -77,14 +83,14 @@ class BotCurrentPose(Node):
 
         self.odom_subscription = self.create_subscription(
             Odometry,
-            'odom',
+            '/odom',
             self.odom_callback,
             qos_profile_sensor_data
         )
 
         self.pose_publisher = self.create_publisher(
             PoseStamped,
-            'currentpose',
+            '/currentpose',
             qos_profile_sensor_data
         )
 
