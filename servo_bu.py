@@ -48,7 +48,8 @@ class ServoService(Node):
         for turntime in range(0,110):
             self.left_servo.set_angle(110-turntime)
             self.right_servo.set_angle(70+turntime)
-        time.sleep(0.01)
+            sleep(0.1)
+        
         self.left_servo.close()
         self.right_servo.close()
         
