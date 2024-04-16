@@ -24,7 +24,7 @@ from .lib.bucket_tools import move_to_bucket
 from .lib.servo_client import launch_servo
 
 # constants
-lobby_map_coord = (1.8,2.7) # supposed to be 2.8
+lobby_map_coord = (1.8,2.85) # supposed to be 2.8
 class BotBehaviorParameters():
     def __init__(self):
         self.curr_state = None

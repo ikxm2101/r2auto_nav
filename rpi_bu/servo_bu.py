@@ -3,7 +3,7 @@ import rclpy
 from rclpy.node import Node
 from time import sleep, time
 
-import pigpio
+from .servo_device import ServoDevice
 
 class ServoService(Node):
 
@@ -22,40 +22,72 @@ class ServoService(Node):
         return response
 
     def throw_routine(self):
+        
+        # servo gpio pin numbers turtlebot's perspective
+        left_servo_pin = 12
+        right_servo_pin = 13 
+        
+        # left and right servo devices
+        self.left_servo = ServoDevice(left_servo_pin)
+        self.right_servo = ServoDevice(right_servo_pin)
+        
+        # set initial angles of servo
+        self.left_servo.set_angle(0)
+        self.right_servo.set_angle(180)
+        
+        sleep(1)
+        
+        # launch!
+        self.left_servo.set_angle(110)
+        self.right_servo.set_angle(70)
+        
+        sleep(1)
+        
+        # reset servo positions
+        for turntime in range(0,110):
+            self.left_servo.set_angle(110-turntime)
+            self.right_servo.set_angle(70+turntime)
+        time.sleep(0.01)
+        self.left_servo.close()
+        self.right_servo.close()
+        
+        
         # TODO: change throw routine
-        self.pi = pigpio.pi()
+        
+        # self.pi = pigpio.pi()
+        
+        
+        # try:
+        #     self.pi.set_PWM_frequency(left_servo, 50) # set frequency to 50Hz for servo
+        #     self.pi.set_PWM_frequency(right_servo, 50) # set frequency to 50Hz for servo
+        #     self.pi.set_PWM_dutycycle(left_servo, 8) # 2.5% duty cycle, 2.5 / 100 * 255~7, 0 degrees
+        #     self.pi.set_PWM_dutycycle(right_servo, 33) # starting position
 
-        try:
-            self.pi.set_PWM_frequency(12, 50) # set frequency to 50Hz for servo
-            self.pi.set_PWM_frequency(13, 50) # set frequency to 50Hz for servo
-            self.pi.set_PWM_dutycycle(12, 8) # 2.5% duty cycle, 2.5/100*255~7, 0 degrees
-            self.pi.set_PWM_dutycycle(13, 33) # starting position
+        #     sleep(1)
 
-            sleep(1)
+        #     # go more than halfway
+        #     self.pi.set_PWM_dutycycle(left_servo, 28)
+        #     self.pi.set_PWM_dutycycle(right_servo, right_servo)
 
-            # go more than halfway
-            self.pi.set_PWM_dutycycle(12, 28)
-            self.pi.set_PWM_dutycycle(13, 13)
+        #     sleep(1)
 
-            sleep(1)
+        #     # go all the way
+        #     self.pi.set_PWM_dutycycle(left_servo, 33)
+        #     self.pi.set_PWM_dutycycle(right_servo, 8)
 
-            # go all the way
-            self.pi.set_PWM_dutycycle(12, 33)
-            self.pi.set_PWM_dutycycle(13, 8)
+        #     sleep(2)
 
-            sleep(2)
+        #     for i in range(1, 33-8+1):
+        #         self.pi.set_PWM_dutycycle(left_servo, 33-i)
+        #         self.pi.set_PWM_dutycycle(right_servo, 8+i)
+        #         sleep(0.1)
 
-            for i in range(1, 33-8+1):
-                self.pi.set_PWM_dutycycle(12, 33-i)
-                self.pi.set_PWM_dutycycle(13, 8+i)
-                sleep(0.1)
+        # except KeyboardInterrupt:
+        #     pass
 
-        except KeyboardInterrupt:
-            pass
-
-        self.pi.set_mode(12, pigpio.INPUT)
-        self.pi.set_mode(13, pigpio.INPUT)
-        self.pi.stop()
+        # self.pi.set_mode(left_servo, pigpio.INPUT)
+        # self.pi.set_mode(right_servo, pigpio.INPUT)
+        # self.pi.stop()
 
 def main():
     rclpy.init()
@@ -64,6 +96,8 @@ def main():
 
     rclpy.spin(servo_service)
 
+    servo_service.throw_routine()
+    
     rclpy.shutdown()
 
 
