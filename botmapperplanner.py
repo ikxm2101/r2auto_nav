@@ -91,12 +91,12 @@ class BotMapperPlannerParameters():
         self.path_occ = list()
         self.path_map = list()
         self.path_wps = list()
-        
+
         '''
         Planner Parameters
         '''
-        self.wall_dilate_size = 2
-        self.turning_cost = 100
+        self.wall_dilate_size = int((0.300 / 2) // self.resolution + 1)
+        self.turning_cost = 7
 
 
 class BotMapperPlanner(Node):
@@ -155,7 +155,7 @@ class BotMapperPlanner(Node):
                          self.params.resolution))  # in grid cells
 
         # Get the indices of the occupied cells
-        occupied_indices = np.where(self.params.occ_2d == self.params.occupied)
+        occupied_indices = np.where(self.occ_2d == self.params.occupied)
         # self.get_logger().info(f'occupied indices: {occupied_indices}')
 
         for y, x in zip(*occupied_indices):
@@ -199,7 +199,7 @@ class BotMapperPlanner(Node):
 
     def update_obstaclelayer(self):
         # initialiise obstacle layer by creating a copy of map_2d
-        self.params.obstacle_layer = self.params.occ_2d.copy()
+        self.params.obstacle_layer = self.occ_2d.copy()
         # assign costs to cells accordingly
         self.params.obstacle_layer[self.params.obstacle_layer ==
                                    self.params.unknown] = self.params.obstacle_unknown
@@ -228,7 +228,17 @@ class BotMapperPlanner(Node):
         # Publish the obstacle layer message
         self.obstacle_publisher.publish(layer_msg)
 
-    def create_costmap(self, src: np.ndarray, dilate=2, threshold=50, inflation_radius=4, inflation_step=2):
+    def create_costmap(self, src: np.ndarray, dilate=2, threshold=40, inflation_radius=4, inflation_step=2, erode=2):
+        array_eroded: np.ndarray = src.copy()
+        array_eroded[src == -1] = 1
+        array_eroded[src != -1] = 0
+        array_eroded = cv.morphologyEx(
+            np.uint8(array_eroded),
+            cv.MORPH_CLOSE,
+            cv.getStructuringElement(
+                cv.MORPH_RECT, (2 * erode + 1, 2 * erode + 1))
+        )  # Dilate then erode the unknown points, to get rid of stray wall and stray unoccupied points
+
         # create a copy of the occ_2d consisting of values, -1 to 100 indicating probability of occupancy
         array_dilated: np.ndarray = src.copy()
         # any cell with probability of possibly being occupied is assigned an inflation step
@@ -253,31 +263,36 @@ class BotMapperPlanner(Node):
             array_dilated[array_dilated != 0] = inflation_step
 
         array_inflated = np.int8(array_inflated)
-        array_inflated[src == -1] = -1
+        array_inflated[array_eroded == 1] = -1
         array_inflated[wall_indexes] = 100
         return array_inflated
 
     def update_costmap(self):
         raw_occ_2d = self.occ_data.reshape(
             self.params.height, self.params.width)
-        self.params.costmap = self.create_costmap(raw_occ_2d, dilate=2, inflation_radius=4,
-                                                  inflation_step=2, threshold=50)
+        self.params.costmap = self.create_costmap(
+            raw_occ_2d,
+            dilate=int((0.300 / 2) // self.params.resolution + 1), # the higher this is, the further i avoid straight walls
+            inflation_radius=8,
+            inflation_step=5,
+            threshold=52,
+            erode=6)
 
         # create costmap message
-        now = rclpy.time.Time()
-        costmap_msg = OccupancyGrid()
-        # header
-        costmap_msg.header.frame_id = 'map'
-        costmap_msg.header.stamp = now.to_msg()
-        # info
-        costmap_msg.info.resolution = self.params.resolution
-        costmap_msg.info.height = self.params.height
-        costmap_msg.info.width = self.params.width
-        costmap_msg.info.origin.position.x = self.params.origin_x
-        costmap_msg.info.origin.position.y = self.params.origin_y
-        # data
-        costmap_msg.data = Array(
-            'b', self.params.costmap.ravel().astype(np.int8))
+        # now = rclpy.time.Time()
+        # costmap_msg = OccupancyGrid()
+        # # header
+        # costmap_msg.header.frame_id = 'map'
+        # costmap_msg.header.stamp = now.to_msg()
+        # # info
+        # costmap_msg.info.resolution = self.params.resolution
+        # costmap_msg.info.height = self.params.height
+        # costmap_msg.info.width = self.params.width
+        # costmap_msg.info.origin.position.x = self.params.origin_x
+        # costmap_msg.info.origin.position.y = self.params.origin_y
+        # # data
+        # costmap_msg.data = Array(
+        #     'b', self.params.costmap.ravel().astype(np.int8))
 
         # # add the costs on the inflation layer
         # self.params.costmap = self.params.inflation_layer + self.params.obstacle_layer
@@ -289,7 +304,7 @@ class BotMapperPlanner(Node):
         # costmap_msg.data = Array(map(int, self.params.costmap.flatten())) # Flatten the costmap and convert it to a list of integers
 
         # Publish the costmap message
-        self.costmap_publisher.publish(costmap_msg)
+        # self.costmap_publisher.publish(costmap_msg)
 
     '''
     Coordinate Conversions:
@@ -359,7 +374,7 @@ class BotMapperPlanner(Node):
 
     def check_for_target(self, occ_x, occ_y, target):
         # maze boundaries in occupancy grid coordinates
-        # dereference maze boundaries from origiin
+        # dereference maze boundaries from origin
         deref_maze_min_x, deref_maze_min_y = self.map_coord_to_map_origin(
             (self.params.maze_min_x, self.params.maze_min_y))
         deref_maze_max_x, deref_maze_max_y = self.map_coord_to_map_origin(
@@ -377,7 +392,7 @@ class BotMapperPlanner(Node):
         # check if is target
 
         def is_target(neigh_occ_x, neigh_occ_y):
-            return self.params.occ_2d[neigh_occ_y][neigh_occ_x] == target
+            return self.occ_2d[neigh_occ_y][neigh_occ_x] == target
         # check for all directions
         for direction in self.get_directions(occ_x, occ_y):
             neigh_occ_x, neigh_occ_y = direction
@@ -385,51 +400,110 @@ class BotMapperPlanner(Node):
                 return True
         return False
 
-    def get_goal(self):
-        self.params.goal_in_occ = tuple()
-        furthest_coord = 0
+    def get_goal(self, checked_goals: set):
+        # self.params.goal_in_occ = tuple()
+        # furthest_coord = 0
+
+        # def is_in_bounds(occ_x, occ_y):
+        #     return (occ_x < self.params.width and occ_y < self.params.height
+        #             and occ_x > 0 and occ_y > 0)
 
         def is_unoccupied(occ_x, occ_y):
-            return (self.params.occ_2d[occ_y][occ_x] == self.params.unoccupied)
+            return (self.occ_2d[occ_y][occ_x] == self.params.unoccupied)
 
         def is_next_to_unknown(occ_x, occ_y):
             return self.check_for_target(occ_x, occ_y, self.params.unknown)
 
-        # find furthest y coordinate first
+        # # find furthest y coordinate first
+        # for occ_y in range(self.params.height):
+        #     for occ_x in range(self.params.width):
+        #         if occ_x + occ_y > furthest_coord and is_unoccupied(occ_x, occ_y) and is_next_to_unknown(occ_x, occ_y) and is_in_bounds(occ_x, occ_y):
+        #             furthest_coord = occ_x + occ_y
+        #             self.params.goal_in_occ = (occ_x, occ_y)
+
+        # goal_coord_to_occ_origin = self.occ_to_map(self.params.goal_in_occ)
+        # self.params.goal_in_map = self.map_coord_to_map_origin(
+        #     goal_coord_to_occ_origin)
+
+        # goal_in_occ = (0, 0)
+        # occ_x, occ_y = occ_x_start, occ_y_start
+
+        # while goal_in_occ == (0, 0) and occ_y >= 0:
+
+        #     # start searching for goal starting from last found goal
+        #     if occ_y == occ_y_start:
+
+        #         # search from the right first (furthest x)
+        #         # make sure occ_x remains in bounds
+        #         while goal_in_occ == (0, 0) and occ_x_start >= 0:
+        #             if is_unoccupied(occ_x_start, occ_y) \
+        #                     and is_next_to_unknown(occ_x_start, occ_y):
+        #                 goal_in_occ = (occ_x_start, occ_y)
+        #             occ_x_start -= 1  # decrement occ_x_start to check all the columns
+
+        #     # if the entire row for the same occ_y is explored already,
+        #     # start looking through the rows starting from furthest x
+        #     else:
+        #         occ_x = self.params.width - 1
+        #         while goal_in_occ == (0, 0) and occ_x >= 0:
+        #             if is_unoccupied(occ_x, occ_y) \
+        #                     and is_next_to_unknown(occ_x, occ_y):
+        #                 goal_in_occ = (occ_x, occ_y)
+        #             occ_x -= 1
+        #     occ_y -= 1
+
+        # return goal_in_occ
+
+        # # check if exploration is complete
+        # if not self.params.goal_in_occ:
+        #     self.get_logger().info('No goal found')
+        #     return False
+        # return True
+
+        possible_goals = set()
+        furthest_goal = (0, 0)
+
+        # get possible goals
         for occ_y in range(self.params.height):
             for occ_x in range(self.params.width):
-                if occ_x + occ_y > furthest_coord and is_unoccupied(occ_x, occ_y) and is_next_to_unknown(occ_x, occ_y):
-                    furthest_coord = occ_x + occ_y
-                    self.params.goal_in_occ = (occ_x, occ_y)
+                if is_unoccupied(occ_x, occ_y) and is_next_to_unknown(occ_x, occ_y):
+                    possible_goals.add((occ_x, occ_y))
 
-        goal_coord_to_occ_origin = self.occ_to_map(self.params.goal_in_occ)
-        self.params.goal_in_map = self.map_coord_to_map_origin(
-            goal_coord_to_occ_origin)
-        
-        # check if exploration is complete
-        if not self.params.goal_in_occ:
-            self.get_logger().info('No goal found')
-            return False
-        return True
+        # filter possible goals with checked goals
+        possible_goals = possible_goals - checked_goals
+
+        if possible_goals == set():
+            return furthest_goal, checked_goals
+
+        # find largest y for any x
+        for goal in possible_goals:
+            if goal[1] > furthest_goal[1]:
+                furthest_goal = goal
+        checked_goals.add(furthest_goal)
+        return furthest_goal, checked_goals
 
     def get_robot(self):
         # return self.params.pos_in_map
         while True:
             try:
-                now = rclpy.time.Time()
                 tf = self.tfBuffer.lookup_transform(
                     'map',
                     'base_link',
-                    now
+                    rclpy.time.Time()
                 )
                 break
-            except (LookupException, ConnectivityException, ExtrapolationException) as e:
-                self.get_logger().info('No transformation found')
+            except LookupException as e1:
+                self.get_logger().info('lookup')
+            except ConnectivityException as e2:
+                self.get_logger().info('connectivity')
+            except ExtrapolationException as e3:
+                self.get_logger().info('extrapolation')
+
         self.params.pos_in_map = (
             tf.transform.translation.x, tf.transform.translation.y)
         self.params.pos_in_occ = self.map_to_occ(
             self.map_coord_to_occ_origin(self.params.pos_in_map))
-        
+
     '''
     Path Planning
     '''
@@ -505,14 +579,14 @@ class BotMapperPlanner(Node):
         # dictionary to store the path (next_pos (key) -> curr_pos (value))
         came_from = {start: None}
         cost_so_far = {start: 0}  # dictionary to store the path cost
+        final_pos = tuple()
 
         while not waypoints.empty():
             (_, curr_pos) = waypoints.get()
 
             if is_within_goal(curr_pos, goal):
-                print("Hello")
                 final_pos = curr_pos  # update final position of path to current position
-                self.get_robot() # update robot positionn
+                self.get_robot()  # update robot positionn
                 self.get_logger().info(
                     f'Start/Robot position in occ: {self.params.pos_in_occ}')
                 self.get_logger().info(f'Goal Found! : {goal}')
@@ -551,35 +625,44 @@ class BotMapperPlanner(Node):
 
         return came_from, cost_so_far, final_pos
 
-    def generate_path_wps(self, path_array):
-        path_wps = []
-        prev_diff = (round((path_array[1][0] - path_array[0][0]),2), round((path_array[1][1] - path_array[0][1]), 2))
-        for i in range(1,len(path_array)):
-            current_diff = (round((path_array[i][0] - path_array[i-1][0]),2), round((path_array[i][1] - path_array[i-1][1]),2))
+    def get_waypoints(self, path_array: list):  # path_array in rviz coord
+        """Generate waypoints (vertices) from shortest path
+
+        Args:
+            path_array (list): List of each individual point (in (x,y) rviz coordinates) of the shortest path
+
+        Returns:
+            waypoints_array (list): List of waypoints (in rviz coordinates format)
+        """
+        waypoints_array = []
+        prev_diff = (round((path_array[1][0] - path_array[0][0]), 2),
+                     round((path_array[1][1] - path_array[0][1]), 2))
+        for i in range(1, len(path_array)):
+            current_diff = (round((path_array[i][0] - path_array[i-1][0]), 2), round(
+                (path_array[i][1] - path_array[i-1][1]), 2))
             if prev_diff != current_diff:
                 prev_diff = current_diff
                 print(prev_diff)
                 print(current_diff)
-                path_wps.append(path_array[i-1])
-                path_wps.append(path_array[-1])
-        return path_wps
-    
+                waypoints_array.append(path_array[i-1])
+        waypoints_array.append(path_array[-1])
+        return waypoints_array
+
     # get path using a_star algorithm
-    def get_path(self, lobby_pos=(), flag='maze'):
+    def get_path(self, start, goal):
         # get path starting from goal position with reference to occ
         # graph to be used for a star (can be costmap or occ_2d)
-        graph = self.params.occ_2d
-        start_pos = self.params.pos_in_occ  # start position for a star
-        goal_pos = self.params.goal_in_occ  # goal position for a star
+        graph = self.occ_2d
+        start_pos = start  # start position for a star
+        goal_pos = goal  # goal position for a star
         came_from, cost_so_far, final_pos = self.a_star_search(
             graph, start_pos, goal_pos)
 
-        # final_position of the path
-        if flag == 'maze':
-            last_pos = final_pos
-        if flag == 'lobby':
-            last_pos = lobby_pos
+        if final_pos == tuple():
+            self.get_logger().info('No path to goal found!')
+            return None
 
+        last_pos = final_pos
         path_occ = [last_pos]
         prev_pos = tuple()
 
@@ -598,7 +681,7 @@ class BotMapperPlanner(Node):
         for point_in_path_map in path_map_to_map_origin:
             path_map.append(
                 (round(point_in_path_map[0], 4), (round(point_in_path_map[1], 4))))
-        return {'path_occ': path_occ, 'path_map': path_map}
+        return path_map
 
     '''
     Publishes
@@ -643,61 +726,69 @@ class BotMapperPlanner(Node):
         )
         self.map_subscription  # prevent unused variable warning
 
-        self.pose_subscription = self.create_subscription(
-            PoseStamped,
-            '/currentpose',
-            self.pose_callback,
-            qos_profile_sensor_data
-        )
-        
-        self.pose_subscription # prevent unused variable warining
-        
-        self.goal_reached_subscription = self.create_subscription(
-            String,
-            '/goal_reached',
-            self.goal_reached_callback,
-            10
-        )
-        self.goal_reached_subscription  # prevent unused variable warning
+        # self.pose_subscription = self.create_subscription(
+        #     PoseStamped,
+        #     '/currentpose',
+        #     self.pose_callback,
+        #     qos_profile_sensor_data
+        # )
+        # self.pose_subscription  # prevent unused variable warining
+
+        # self.goal_reached_subscription = self.create_subscription(
+        #     String,
+        #     '/goal_reached',
+        #     self.goal_reached_callback,
+        #     10
+        # )
+        # self.goal_reached_subscription  # prevent unused variable warning
+
+        # self.costmap_subscription = self.create_subscription(
+        #     OccupancyGrid,
+        #     '/global_costmap/costmap',
+        #     self.costmap_callback,
+        #     qos_profile_system_default
+        # )
+        # self.costmap_subscription  # prevent unused variable warning
+
         '''
         Publishers
         '''
-        self.inflation_publisher = self.create_publisher(
-            OccupancyGrid,
-            '/map/inflation_layer',
-            qos_profile_sensor_data
-        )
+        # self.inflation_publisher = self.create_publisher(
+        #     OccupancyGrid,
+        #     '/map/inflation_layer',
+        #     qos_profile_sensor_data
+        # )
 
-        self.obstacle_publisher = self.create_publisher(
-            OccupancyGrid,
-            '/map/obstacle_layer',
-            qos_profile_sensor_data
-        )
+        # self.obstacle_publisher = self.create_publisher(
+        #     OccupancyGrid,
+        #     '/map/obstacle_layer',
+        #     qos_profile_sensor_data
+        # )
 
-        self.costmap_publisher = self.create_publisher(
-            OccupancyGrid,
-            '/global_costmap/costmap',
-            qos_profile_system_default
-        )
+        # self.costmap_publisher = self.create_publisher(
+        #     OccupancyGrid,
+        #     '/global_costmap/costmap',
+        #     qos_profile_system_default
+        # )
 
-        self.goal_in_map_publisher = self.create_publisher(
-            PoseStamped,
-            '/goal_in_map',
-            10
-        )
+        # self.goal_in_map_publisher = self.create_publisher(
+        #     PoseStamped,
+        #     '/goal_in_map',
+        #     10
+        # )
 
-        self.goal_in_occ_publisher = self.create_publisher(
-            PoseStamped,
-            '/goal_in_occ',
-            10
-        )
+        # self.goal_in_occ_publisher = self.create_publisher(
+        #     PoseStamped,
+        #     '/goal_in_occ',
+        #     10
+        # )
+        
         '''
         Transforms
         '''
-        self.tfBuffer = tf2_ros.Buffer(
-            cache_time=rclpy.duration.Duration(seconds=0.1))
+        self.tfBuffer = tf2_ros.Buffer()
         self.tfListener = tf2_ros.TransformListener(
-            self.tfBuffer, self, qos=qos_profile_sensor_data)
+            self.tfBuffer, self)
 
     '''
     Callbacks and Updates
@@ -705,10 +796,14 @@ class BotMapperPlanner(Node):
 
     def occ_callback(self, msg):
         # self.get_logger().info('In occ callback')
-        # self.flatten_layers()
-        self.update_params(msg)
-        # self.reshape_layers()
 
+        # update map parameters
+        self.update_params(msg)
+
+        # process map data
+        # self.flatten_layers()
+
+        # self.reshape_layers()
         self.occ_data = np.array(msg.data)  # create numpy array
 
         # compute histogram to get
@@ -718,36 +813,32 @@ class BotMapperPlanner(Node):
 
         # occ_counts go from 1 to 3 so we can use uint8 (1 - Unknown, 2 - Unoccupied,, 3 - Occupied)
         # reshape into 2D
-        self.params.occ_2d = np.uint8(self.occ_flat.reshape(
+        self.occ_2d = np.uint8(self.occ_flat.reshape(
             self.params.height, self.params.width))  # occ_y-major
         # self.occdata = np.uint8(oc2.reshape(msg.info.height,msg.info.width,order='F')) # column-major
 
+        # update costmap
         # self.update_inflationlayer()
         # self.update_obstaclelayer()
         self.update_costmap()
 
-        # get goal and robot positions
-        if self.get_goal(): # if there is a goal
-            self.get_robot()
-            # publish to topics (not used LOL)
-            self.publish_goal_in_map()
-            self.publish_goal_in_occ()
-            # get path in map coordinates and generate wps with map coordinates
-            self.params.path_map = self.get_path()['path_map']
-            self.get_logger().info(f'Path in map: {self.params.path_map}')
-            #self.get_logger().info(f'Path in occupancy grid: {self.params.path_occ}')
-            # self.params.path_wps = self.generate_path_wps(self.params.path_occ)
-            
-        raise SystemExit # exit node
-
-    def goal_reached_callback(self, msg):
-        if msg.data == 'goal_in_map reached':
-            self.get_goal()
-            self.publish_goal_in_map()
-
-    def pose_callback(self, msg):
-        self.params.pos_in_map = (msg.pose.position.x, msg.pose.position.y)
+        # get robot position
+        self.get_robot()  # get robot position
         
+        # publish to topics
+        # self.publish_goal_in_map()
+        # self.publish_goal_in_occ()
+        
+        raise SystemExit  # exit node
+    
+    # def goal_reached_callback(self, msg):
+    #     if msg.data == 'goal_in_map reached':
+    #         self.get_goal()
+    #         self.publish_goal_in_map()
+
+    # def pose_callback(self, msg):
+    #     self.params.pos_in_map = (msg.pose.position.x, msg.pose.position.y)
+
     def update_params(self, msg):
         self.params.prev_width = self.params.width
         self.params.prev_height = self.params.height
@@ -756,13 +847,40 @@ class BotMapperPlanner(Node):
         self.params.origin_x = msg.info.origin.position.x
         self.params.origin_y = msg.info.origin.position.y
 
+class LobbyCheck(Node, BotMapperPlanner):
+    def __init__(self, lobby_map_coord=(1.8,2.7)):
+        Node.__init__("mapcheck")
+        BotMapperPlanner.__init__()
+        
+        self.quit = 0 # flag to quit search
+        self.lobby_map_coord = lobby_map_coord
+        self.subscription = self.create_subscription(
+            OccupancyGrid,
+            '/global_costmap/costmap',
+            self.occ_callback,
+            10)
+        self.subscription  # prevent unused variable warning
 
+    def occ_callback(self, msg):
+        occdata = np.array(msg.data)
+        cdata = occdata.reshape(msg.info.height, msg.info.width)
+        cdata[cdata == 100] = -1
+        cdata[cdata >= 0] = 1
+        cdata[cdata == -1] = 0
+        no_wall_indexes = np.nonzero(cdata)
+        odata_lobby_coord = self.map_to_occ(self.map_coord_to_occ_origin(self.lobby_map_coord, msg.info.origin.position.x, msg.info.origin.position.y))
+        
+        if (odata_lobby_coord[0] in no_wall_indexes[1] and odata_lobby_coord[1] in no_wall_indexes[0]):
+            self.quit = 1
+            print('found lobby, quit search')
+            
 def main(args=None):
     rclpy.init(args=args)
     mapperplanner = BotMapperPlanner()
     rclpy.spin(mapperplanner)
     mapperplanner.destroy_node()
     rclpy.shutdown()
+
 
 if __name__ == '__main__':
     main()

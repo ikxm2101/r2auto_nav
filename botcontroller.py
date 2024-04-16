@@ -200,7 +200,8 @@ def stop_kill(node: Node):
 def angular(cur_pos, cur_rot, dx, dy, node: Node):
     i, j, cur_yaw = euler_from_quaternion(
         cur_rot.x, cur_rot.y, cur_rot.z, cur_rot.w)
-    target_yaw = math.atan2(dy, -dx)
+    target_yaw = math.atan2(dy, -dx) # front facing
+    # target_yaw = math.atan(dy, dx) # back facing
     target_rot = quaternion_from_euler(i, j, target_yaw)
 
     rot_tf = quaternion_multiply(

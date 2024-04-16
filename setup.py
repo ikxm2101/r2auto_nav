@@ -29,7 +29,8 @@ setup(
             'behavior = auto_nav.botbehavior:main',
             'currentpose = auto_nav.botcurrentpose:main',
             'mapperplanner = auto_nav.botmapperplanner:main',
-            'controller = auto_nav.botcontroller:main'
+            'controller = auto_nav.botcontroller:main',
+            'costmapviz = auto_nav.botcostmap:main'
         ],
     },
 )
