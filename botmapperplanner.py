@@ -95,7 +95,7 @@ class BotMapperPlannerParameters():
         '''
         Planner Parameters
         '''
-        self.wall_dilate_size = int((0.300 / 2) // self.resolution + 1)
+        self.wall_dilate_size = int((0.260 / 2) // self.resolution + 1)
         self.turning_cost = 7
 
 
@@ -272,9 +272,9 @@ class BotMapperPlanner(Node):
             self.params.height, self.params.width)
         self.params.costmap = self.create_costmap(
             raw_occ_2d,
-            dilate=int((0.300 / 2) // self.params.resolution + 1), # the higher this is, the further i avoid straight walls
-            inflation_radius=8,
-            inflation_step=5,
+            dilate=int((0.283 / 2) // self.params.resolution + 1), # the higher this is, the further i avoid straight walls
+            inflation_radius=4,
+            inflation_step=24,
             threshold=52,
             erode=6)
 
@@ -576,6 +576,7 @@ class BotMapperPlanner(Node):
         waypoints = PriorityQueue()
         waypoints.put((0, start))
 
+        turning_cost = 2
         # dictionary to store the path (next_pos (key) -> curr_pos (value))
         came_from = {start: None}
         cost_so_far = {start: 0}  # dictionary to store the path cost
@@ -593,36 +594,61 @@ class BotMapperPlanner(Node):
                 self.get_logger().info(f'End of waypoint: {final_pos}')
                 break
 
-            for next_pos in neighbors(curr_pos, graph):  # check all neighbors
-                new_cost = cost_so_far[curr_pos] + \
-                    cost_to_goal(
-                        curr_pos, next_pos)  # calculate new cost to next position
-                if next_pos not in cost_so_far or new_cost < cost_so_far[next_pos]:
-                    # add or update the cost to the next position
-                    cost_so_far[next_pos] = new_cost
-                    # calculate priority using heuristic, costmap and turning cost
-                    # heuristic
-                    priority = cost_so_far[next_pos] + \
-                        heuristic(goal, next_pos)
+        #     for next_pos in neighbors(curr_pos, graph):  # check all neighbors
+        #         new_cost = cost_so_far[curr_pos] + \
+        #             cost_to_goal(
+        #                 curr_pos, next_pos)  # calculate new cost to next position
+        #         if next_pos not in cost_so_far or new_cost < cost_so_far[next_pos]:
+        #             # add or update the cost to the next position
+        #             cost_so_far[next_pos] = new_cost
+        #             # calculate priority using heuristic, costmap and turning cost
+        #             # heuristic
+        #             priority = cost_so_far[next_pos] + \
+        #                 heuristic(goal, next_pos)
 
-                    # costmap
+        #             # costmap
+        #             priority += self.params.costmap[next_pos[1]][next_pos[0]]
+
+        #             # turning cost
+        #             # get previous position from path
+        #             prev_pos = came_from[curr_pos]
+        #             if prev_pos != None:
+        #                 next_direction = (
+        #                     next_pos[0] - curr_pos[0], next_pos[1] - curr_pos[1])
+        #                 current_direction = (
+        #                     curr_pos[0] - prev_pos[0], curr_pos[1] - prev_pos[1])
+        #                 if current_direction != next_direction:
+        #                     priority += self.params.turning_cost
+
+        #             # update waypoints with calculated priority
+        #             waypoints.put((priority, next_pos))
+        #             came_from[next_pos] = curr_pos  # update path
+
+        # return came_from, cost_so_far, final_pos
+    
+            for next_pos in neighbors(curr_pos, graph):
+                new_cost = cost_so_far[curr_pos] + cost_to_goal(curr_pos, next_pos)
+                prev_pos = came_from[curr_pos]
+                if prev_pos != None:
+                    # next_direction = (int(next[0] - current[0]), int(next[1] - current[1]))
+                    # current_direction = (int(current[0] - prev[0]), int(current[1] - prev[1]))
+                    next_direction = (next_pos[0] - curr_pos[0], next_pos[1] - curr_pos[1])
+                    current_direction = (curr_pos[0] - prev_pos[0], curr_pos[1] - prev_pos[1])
+                    if  current_direction != next_direction:
+                        
+                        new_cost += turning_cost
+                        
+            
+                new_cost = round(new_cost,2)
+                
+                if next_pos not in cost_so_far or new_cost < round(cost_so_far[next_pos],2):
+
+                    priority = new_cost + heuristic(goal, next_pos)
                     priority += self.params.costmap[next_pos[1]][next_pos[0]]
-
-                    # turning cost
-                    # get previous position from path
-                    prev_pos = came_from[curr_pos]
-                    if prev_pos != None:
-                        next_direction = (
-                            next_pos[0] - curr_pos[0], next_pos[1] - curr_pos[1])
-                        current_direction = (
-                            curr_pos[0] - prev_pos[0], curr_pos[1] - prev_pos[1])
-                        if current_direction != next_direction:
-                            priority += self.params.turning_cost
-
-                    # update waypoints with calculated priority
-                    waypoints.put((priority, next_pos))
-                    came_from[next_pos] = curr_pos  # update path
-
+                    cost_so_far[next_pos] = new_cost
+                    waypoints.put((priority,next_pos))
+                    came_from[next_pos] = curr_pos
+                    
         return came_from, cost_so_far, final_pos
 
     def get_waypoints(self, path_array: list):  # path_array in rviz coord
@@ -847,10 +873,9 @@ class BotMapperPlanner(Node):
         self.params.origin_x = msg.info.origin.position.x
         self.params.origin_y = msg.info.origin.position.y
 
-class LobbyCheck(Node, BotMapperPlanner):
+class LobbyCheck(BotMapperPlanner):
     def __init__(self, lobby_map_coord=(1.8,2.7)):
-        Node.__init__("mapcheck")
-        BotMapperPlanner.__init__()
+        super().__init__("mapcheck")
         
         self.quit = 0 # flag to quit search
         self.lobby_map_coord = lobby_map_coord
@@ -862,13 +887,14 @@ class LobbyCheck(Node, BotMapperPlanner):
         self.subscription  # prevent unused variable warning
 
     def occ_callback(self, msg):
+        self.update_params(msg)
         occdata = np.array(msg.data)
         cdata = occdata.reshape(msg.info.height, msg.info.width)
         cdata[cdata == 100] = -1
         cdata[cdata >= 0] = 1
         cdata[cdata == -1] = 0
         no_wall_indexes = np.nonzero(cdata)
-        odata_lobby_coord = self.map_to_occ(self.map_coord_to_occ_origin(self.lobby_map_coord, msg.info.origin.position.x, msg.info.origin.position.y))
+        odata_lobby_coord = self.map_to_occ(self.map_coord_to_occ_origin(self.lobby_map_coord))
         
         if (odata_lobby_coord[0] in no_wall_indexes[1] and odata_lobby_coord[1] in no_wall_indexes[0]):
             self.quit = 1

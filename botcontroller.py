@@ -127,10 +127,10 @@ class WPTurner(Node):
 def move_straight(
     target: Tuple[float, float],
     end_distance_range: float = 0.1,
-    PID_angular: Tuple[float, float, float] = (1, 0, 2),
-    PID_linear: Tuple[float, float, float] = (5, 0, 2),
+    PID_angular: Tuple[float, float, float] = (0.6, 0, 0.2),
+    PID_linear: Tuple[float, float, float] = (0.8, 0, 0.2),
     angular_speed_limit: float = 1,  # old 2.84 # max: 1
-    linear_speed_limit: float = 0.15,  # old 0.22 # max: .15
+    linear_speed_limit: float = 0.2,  # old 0.22 # max: .15
 ):
     """Move Straight to RViz Waypoint
 
@@ -161,8 +161,8 @@ def move_straight(
 
 def move_turn(
     target: Tuple[float, float],
-    end_yaw_range: float = 0.05,
-    PID_angular: Tuple[float, float, float] = (1, 0, 2),
+    end_yaw_range: float = 0.01,
+    PID_angular: Tuple[float, float, float] = (4, 0, 0.4),
     angular_speed_limit: float = 1,  # old 2.84 # max: 1
 ):
     """Turn to face RViz Waypoint
@@ -193,7 +193,7 @@ def stop_kill(node: Node):
         node.cmdvelpub.publish(twist)
         time.sleep(0.1)
     node.get_logger().info("Done")
-    node.subscription.destroy()
+    # node.subscription.destroy()
     node.destroy_node()
 
 
@@ -226,7 +226,7 @@ def dxdy(trans, node: Node):
     return cur_pos, cur_rot, dx, dy
 
 
-def return_cur_pos():
+def get_curr_pos():
     return cur_pos
 
 

@@ -4,7 +4,6 @@ from example_interfaces.srv import SetBool
 import rclpy
 from rclpy.node import Node
 
-
 class ServoClientAsync(Node):
 
     def __init__(self):
