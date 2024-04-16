@@ -29,7 +29,7 @@ setup(
             'behavior = auto_nav.botbehavior:main',
             'mapperplanner = auto_nav.botmapperplanner:main',
             'controller = auto_nav.botcontroller:main',
-            'costmapviz = auto_nav.botcostmap:main'
+            'costmapviz = auto_nav.botcostmap:main',
             'servo_bu = auto_nav.rpi_bu.servo_bu:main'
         ],
     },
