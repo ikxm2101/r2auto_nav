@@ -10,7 +10,7 @@ class ServoService(Node):
     def __init__(self):
         super().__init__('servo_service')
         self.srv = self.create_service(SetBool, 'set_bool', self.set_bool_callback)
-        self.get_logger('Servo service').info('f{Up!}')
+        self.get_logger().info(f'Up! at {time()}')
 
     def set_bool_callback(self, request, response):
         if request.data:
