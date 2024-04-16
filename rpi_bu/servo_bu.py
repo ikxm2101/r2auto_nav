@@ -10,6 +10,7 @@ class ServoService(Node):
     def __init__(self):
         super().__init__('servo_service')
         self.srv = self.create_service(SetBool, 'set_bool', self.set_bool_callback)
+        self.get_logger('Servo service').info('f{Up!}')
 
     def set_bool_callback(self, request, response):
         if request.data:
@@ -93,10 +94,10 @@ def main():
     rclpy.init()
 
     servo_service = ServoService()
-
+    servo_service.throw_routine() # test throw routine
     rclpy.spin(servo_service)
 
-    servo_service.throw_routine()
+    
     
     rclpy.shutdown()
 
