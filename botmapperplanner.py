@@ -593,38 +593,6 @@ class BotMapperPlanner(Node):
                 self.get_logger().info(f'Goal Found! : {goal}')
                 self.get_logger().info(f'End of waypoint: {final_pos}')
                 break
-
-        #     for next_pos in neighbors(curr_pos, graph):  # check all neighbors
-        #         new_cost = cost_so_far[curr_pos] + \
-        #             cost_to_goal(
-        #                 curr_pos, next_pos)  # calculate new cost to next position
-        #         if next_pos not in cost_so_far or new_cost < cost_so_far[next_pos]:
-        #             # add or update the cost to the next position
-        #             cost_so_far[next_pos] = new_cost
-        #             # calculate priority using heuristic, costmap and turning cost
-        #             # heuristic
-        #             priority = cost_so_far[next_pos] + \
-        #                 heuristic(goal, next_pos)
-
-        #             # costmap
-        #             priority += self.params.costmap[next_pos[1]][next_pos[0]]
-
-        #             # turning cost
-        #             # get previous position from path
-        #             prev_pos = came_from[curr_pos]
-        #             if prev_pos != None:
-        #                 next_direction = (
-        #                     next_pos[0] - curr_pos[0], next_pos[1] - curr_pos[1])
-        #                 current_direction = (
-        #                     curr_pos[0] - prev_pos[0], curr_pos[1] - prev_pos[1])
-        #                 if current_direction != next_direction:
-        #                     priority += self.params.turning_cost
-
-        #             # update waypoints with calculated priority
-        #             waypoints.put((priority, next_pos))
-        #             came_from[next_pos] = curr_pos  # update path
-
-        # return came_from, cost_so_far, final_pos
     
             for next_pos in neighbors(curr_pos, graph):
                 new_cost = cost_so_far[curr_pos] + cost_to_goal(curr_pos, next_pos)

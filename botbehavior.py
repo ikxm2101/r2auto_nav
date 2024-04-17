@@ -156,86 +156,87 @@ class PathPublisher(Node):
     
 def main(args=None):
 
-    # rclpy.init(args=args)
-    # # lobby check node
-    # lobbycheck = LobbyCheck()
-    # pathpub = PathPublisher()
+    rclpy.init(args=args)
+    # lobby check node
+    lobbycheck = LobbyCheck()
+    pathpub = PathPublisher()
     
-    # time_straight(-0.1, 14)
-    # time.sleep(5) # sleep to update occ grid because lidar damn slow
-    # # search for lobby by priortising furthest y coordinates
-    # for num_searches in range(20): # just to timeout the search eventually
-    #     rclpy.logging.get_logger('Search Number').info(f'{num_searches}')
-    #     path_map, path_wps = search_occ()
-    #     start_time = time.time() # start time for search
-    #     pathpub.publish_path(path_map)
-    #     for wps in path_wps:
-    #         if lobbycheck.quit:
-    #             break
-    #         if (time.time() - start_time) > 10: # 20s to do new search based on new occupancy grid
-    #             break
-    #         print(f'current wp: {wps}')
-    #         move_turn(wps)
-    #         move_straight(wps)
+    time_straight(-0.1, 14)
+    time.sleep(5) # sleep to update occ grid because lidar damn slow
+    # search for lobby by priortising furthest y coordinates
+    for num_searches in range(20): # just to timeout the search eventually
+        rclpy.logging.get_logger('Search Number').info(f'{num_searches}')
+        path_map, path_wps = search_occ()
+        start_time = time.time() # start time for search
+        pathpub.publish_path(path_map)
+        for wps in path_wps:
+            if lobbycheck.quit:
+                break
+            if (time.time() - start_time) > 5: # 20s to do new search based on new occupancy grid
+                break
+            print(f'current wp: {wps}')
+            move_turn(wps)
+            move_straight(wps)
 
-    #         rclpy.spin_once(lobbycheck) # spin lobbycheck node once 
-    #     if lobbycheck.quit:
-    #         print('can see lobby')
-    #         break
+            rclpy.spin_once(lobbycheck) # spin lobbycheck node once 
+        if lobbycheck.quit:
+            print('can see lobby')
+            break
     
-    # print('-----------------------to lobby!-----------------------')  
-    # for _ in range(2): # run twice to confirm its at the lobby coordinates, as path_to_door() allows for some margin of error
-    #     path_map, path_wps = path_to_door(goal_in_map=lobby_map_coord)
-    #     for wps in path_wps:
-    #         # print(x)
-    #         print(f'current wp: {wps}')
-    #         move_turn(wps)
-    #         move_straight(wps)
+    print('-----------------------to lobby!-----------------------')  
+    for _ in range(2): # run twice to confirm its at the lobby coordinates, as path_to_door() allows for some margin of error
+        path_map, path_wps = path_to_door(goal_in_map=lobby_map_coord)
+        for wps in path_wps:
+            # print(x)
+            print(f'current wp: {wps}')
+            move_turn(wps)
+            move_straight(wps)
     
     print('-----------------------http call!-----------------------')
-    # door = 0
-    # try:
-    #     door = open_door(ipaddr)
-    # except Exception as e:
-    #     print(e)
-    # while door == 0:
-    #     print('-----------------------request failed!-----------------------')
-    #     time.sleep(1)
-    #     try:
-    #         door = open_door(ipaddr)
-    #     except Exception as e:
-    #         print(e)
-    # door = 1
+    door = 0
+    try:
+        door = open_door(ipaddr)
+    except Exception as e:
+        print(e)
+    while door == 0:
+        print('-----------------------request failed!-----------------------')
+        time.sleep(1)
+        try:
+            door = open_door(ipaddr)
+        except Exception as e:
+            print(e)
+    door = 1
+    
     print(f'-----------------------going to door {door}!-----------------------')
     # face front
-    # move_turn((get_curr_pos().x, get_curr_pos().y+5))
-    # door_mover()
-    # if door == 1:
-    #     turndeg = -5
-    # elif door == 2:
-    #     turndeg = 5
-    # move_turn((get_curr_pos().x, get_curr_pos().y+5)) # to refresh curr_pos after door_mover
-    # move_turn((get_curr_pos().x+turndeg, get_curr_pos().y))
-    # time_straight(0.15, 4)
+    move_turn((get_curr_pos().x, get_curr_pos().y+5))
+    door_mover()
+    if door == 1:
+        turndeg = -5
+    elif door == 2:
+        turndeg = 5
+    move_turn((get_curr_pos().x, get_curr_pos().y+5)) # to refresh curr_pos after door_mover
+    move_turn((get_curr_pos().x+turndeg, get_curr_pos().y))
+    time_straight(0.15, 4)
     
 
-    while(move_to_bucket(threshold=0.03) is None):
+    while(move_to_bucket(threshold=0.03, dist=0.17) is None):
         time_straight(0.15, 2)
         
-    # print(f'-----------------------launching balls!-----------------------')
-    # launch_servo()
+    print(f'-----------------------launching balls!-----------------------')
+    launch_servo()
     
-    # for num_searches in range(20): # just to timeout the search eventually
-    #     rclpy.logging.get_logger('Search Number').info(f'{num_searches}')
-    #     path_wps = search_occ()
-    #     start_time = time.time() # start time for search
-    #     for wps in path_wps:
-    #         if (time.time() - start_time) > 20: # 20s to do new search based on new occupancy grid
-    #             break
-    #         print(f'current wp: {wps}')
-    #         move_turn(wps, angular_speed_limit=2)
-    #         move_straight(wps, linear_speed_limit=0.2, angular_speed_limit=2)
-    # print(f'-----------------------done!-----------------------')
+    for num_searches in range(20): # just to timeout the search eventually
+        rclpy.logging.get_logger('Search Number').info(f'{num_searches}')
+        path_wps = search_occ()
+        start_time = time.time() # start time for search
+        for wps in path_wps:
+            if (time.time() - start_time) > 20: # 20s to do new search based on new occupancy grid
+                break
+            print(f'current wp: {wps}')
+            move_turn(wps, angular_speed_limit=2)
+            move_straight(wps, linear_speed_limit=0.2, angular_speed_limit=2)
+    print(f'-----------------------done!-----------------------')
     
     
     rclpy.shutdown()
