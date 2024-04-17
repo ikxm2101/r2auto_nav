@@ -95,7 +95,7 @@ class BotMapperPlannerParameters():
         '''
         Planner Parameters
         '''
-        self.wall_dilate_size = int((0.260 / 2) // self.resolution + 1)
+        self.wall_dilate_size = int((0.273 / 2) // self.resolution + 1)
         self.turning_cost = 7
 
 
@@ -272,11 +272,12 @@ class BotMapperPlanner(Node):
             self.params.height, self.params.width)
         self.params.costmap = self.create_costmap(
             raw_occ_2d,
-            dilate=int((0.283 / 2) // self.params.resolution + 1), # the higher this is, the further i avoid straight walls
+            dilate=int((0.273 / 2) // self.params.resolution + 1), # the higher this is, the further i avoid straight walls
             inflation_radius=4,
             inflation_step=24,
             threshold=52,
             erode=6)
+        print(self.params.costmap)
 
         # create costmap message
         # now = rclpy.time.Time()
@@ -712,13 +713,13 @@ class BotMapperPlanner(Node):
         '''
         Subscriptions
         '''
-        self.map_subscription = self.create_subscription(
+        self.costmap_subscription = self.create_subscription(
             OccupancyGrid,
-            '/map',
-            self.occ_callback,
+            '/global_costmap/costmap',
+            self.costmap_callback,
             qos_profile_sensor_data
         )
-        self.map_subscription  # prevent unused variable warning
+        self.costmap_subscription  # prevent unused variable warning
 
         # self.pose_subscription = self.create_subscription(
         #     PoseStamped,
@@ -788,7 +789,7 @@ class BotMapperPlanner(Node):
     Callbacks and Updates
     '''
 
-    def occ_callback(self, msg):
+    def costmap_callback(self, msg):
         # self.get_logger().info('In occ callback')
 
         # update map parameters
@@ -796,25 +797,30 @@ class BotMapperPlanner(Node):
 
         # process map data
         # self.flatten_layers()
-
         # self.reshape_layers()
-        self.occ_data = np.array(msg.data)  # create numpy array
-
-        # compute histogram to get
-        _, _, self.occ_flat = scipy.stats.binned_statistic(
-            self.occ_data, np.nan, statistic='count', bins=self.params.occ_bins)
-        # self.get_logger().info('Unmapped: %i Unoccupied: %i Occupied: %i Total: %i' % (self.occ_counts[0][0], self.occ_counts[0][1], self.occ_counts[0][2], total_bins))
-
+        
+        self.costmap_data = np.array(msg.data)
+        
+        # costmap data into 2d array
+        self.params.costmap = self.costmap_data.copy()
+        self.params.costmap = self.params.costmap.reshape(self.params.height, self.params.width)
+        
+        # occupancy data based on costmap
+        self.occ_data = self.costmap_data.copy()
+        self.occ_data[self.costmap_data == -1] = self.params.unknown
+        self.occ_data[self.costmap_data >= 0] = self.params.unoccupied
+        self.occ_data[self.costmap_data == 100] = self.params.occupied
+        
         # occ_counts go from 1 to 3 so we can use uint8 (1 - Unknown, 2 - Unoccupied,, 3 - Occupied)
         # reshape into 2D
-        self.occ_2d = np.uint8(self.occ_flat.reshape(
+        self.occ_2d = np.uint8(self.occ_data.reshape(
             self.params.height, self.params.width))  # occ_y-major
-        # self.occdata = np.uint8(oc2.reshape(msg.info.height,msg.info.width,order='F')) # column-major
+        # self.occ_2d = np.uint8(oc2.reshape(msg.info.height,msg.info.width,order='F')) # column-major
 
         # update costmap
         # self.update_inflationlayer()
-        # self.update_obstaclelayer()
-        self.update_costmap()
+        # self.update_obstaclelayer()], self.occ_counts[0][2], total_bins))
+        # self.update_costmap()
 
         # get robot position
         self.get_robot()  # get robot position
@@ -843,18 +849,18 @@ class BotMapperPlanner(Node):
 
 class LobbyCheck(BotMapperPlanner):
     def __init__(self, lobby_map_coord=(1.8,2.7)):
-        super().__init__("mapcheck")
+        super().__init__("lobbycheck")
         
         self.quit = 0 # flag to quit search
         self.lobby_map_coord = lobby_map_coord
         self.subscription = self.create_subscription(
             OccupancyGrid,
             '/global_costmap/costmap',
-            self.occ_callback,
+            self.costmap_callback,
             10)
         self.subscription  # prevent unused variable warning
 
-    def occ_callback(self, msg):
+    def costmap_callback(self, msg):
         self.update_params(msg)
         occdata = np.array(msg.data)
         cdata = occdata.reshape(msg.info.height, msg.info.width)

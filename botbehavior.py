@@ -71,7 +71,7 @@ class BotBehavior(Node):
     #     self.params.costmap = np.array(msg.data).reshape(
     #     msg.info.height, msg.info.width)
         
-    # r
+
 
 def search_occ():
     '''
@@ -161,8 +161,7 @@ def main(args=None):
     lobbycheck = LobbyCheck()
     pathpub = PathPublisher()
     
-    time_straight(-0.1, 14)
-    time.sleep(5) # sleep to update occ grid because lidar damn slow
+    # time_straight(-0.1, 14)
     # search for lobby by priortising furthest y coordinates
     for num_searches in range(20): # just to timeout the search eventually
         rclpy.logging.get_logger('Search Number').info(f'{num_searches}')
@@ -192,40 +191,41 @@ def main(args=None):
             move_turn(wps)
             move_straight(wps)
     
-    print('-----------------------http call!-----------------------')
-    door = 0
-    try:
-        door = open_door(ipaddr)
-    except Exception as e:
-        print(e)
-    while door == 0:
-        print('-----------------------request failed!-----------------------')
-        time.sleep(1)
-        try:
-            door = open_door(ipaddr)
-        except Exception as e:
-            print(e)
-    door = 1
+    # print('-----------------------http call!-----------------------')
+    # door = 0
+    # try:
+    #     door = open_door(ipaddr)
+    # except Exception as e:
+    #     print(e)
+    # while door == 0:
+    #     print('-----------------------request failed!-----------------------')
+    #     time.sleep(1)
+    #     try:
+    #         door = open_door(ipaddr)
+    #     except Exception as e:
+    #         print(e)
+    # door = 1
     
-    print(f'-----------------------going to door {door}!-----------------------')
-    # face front
-    move_turn((get_curr_pos().x, get_curr_pos().y+5))
-    door_mover()
-    if door == 1:
-        turndeg = -5
-    elif door == 2:
-        turndeg = 5
-    move_turn((get_curr_pos().x, get_curr_pos().y+5)) # to refresh curr_pos after door_mover
-    move_turn((get_curr_pos().x+turndeg, get_curr_pos().y))
-    time_straight(0.15, 4)
+    # print(f'-----------------------going to door {door}!-----------------------')
+    # # face front
+    # move_turn((get_curr_pos().x, get_curr_pos().y+5))
+    # door_mover()
+    # if door == 1:
+    #     turndeg = -5
+    # elif door == 2:
+    #     turndeg = 5
+    # move_turn((get_curr_pos().x, get_curr_pos().y+5)) # to refresh curr_pos after door_mover
+    # move_turn((get_curr_pos().x+turndeg, get_curr_pos().y))
+    # time_straight(0.15, 4)
     
 
-    while(move_to_bucket(threshold=0.03, dist=0.17) is None):
-        time_straight(0.15, 2)
+    # while(move_to_bucket(threshold=0.03, dist=0.17) is None):
+    #     time_straight(0.15, 2)
         
-    print(f'-----------------------launching balls!-----------------------')
-    launch_servo()
+    # print(f'-----------------------launching balls!-----------------------')
+    # launch_servo()
     
+    print('-----------------------finishing search!!!-----------------------')
     for num_searches in range(20): # just to timeout the search eventually
         rclpy.logging.get_logger('Search Number').info(f'{num_searches}')
         path_wps = search_occ()
