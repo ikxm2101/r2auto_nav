@@ -70,7 +70,7 @@ def check_bucket_lidar(
     if abs(lidar_ranges.size * angle_increment - 6.28) > 0.1:
         warnings.warn("lidar_ranges.size does not match angle_increment!!")
     for i in np.argsort(lidar_ranges):  # start checking from shortest
-        if (math.pi / 4) / angle_increment > i or i > (
+        if (math.pi / 4) / angle_increment > i or i < (
             7 * math.pi / 4
         ) / angle_increment:
             # print("out of range, selected point is behind robot")
@@ -247,7 +247,7 @@ class BucketScanner(Node):
         return 1
 
     def move_to_bucket(self, dist=0.33):
-        print(dist)
+        print(f'dist to bucket{dist}')
         move_turn(self.bucket_pos, end_yaw_range=0.02)
         move_straight(self.bucket_pos, end_distance_range=dist)
 

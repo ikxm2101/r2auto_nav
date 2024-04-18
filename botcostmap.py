@@ -61,7 +61,7 @@ class BotCostmap(Node):
         # np.savetxt("map.txt",occdata.reshape(msg.info.height, msg.info.width),"%d")
         odata = inflate(
             occdata.reshape(msg.info.height, msg.info.width),
-            dilate=int((0.273 / 2) // msg.info.resolution + 1),
+            dilate=int((0.293 / 2) // msg.info.resolution + 1),
             inflation_radius=4,
             inflation_step=24,
             threshold=52,

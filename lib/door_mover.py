@@ -7,6 +7,7 @@ from sensor_msgs.msg import LaserScan
 from geometry_msgs.msg import Twist
 from ..botcontroller import stop_kill
 
+
 class DoorMover(Node):
     def __init__(self):
         super().__init__("door_mover")
@@ -21,42 +22,34 @@ class DoorMover(Node):
         self.lidar_ranges = msg.ranges
         self.angle_increment = msg.angle_increment
 
-    def move(self, door, speed: float = 0.1):
+    def move(self, speed: float = 0.1):
         rclpy.spin_once(self)
-        if door == 1:
-            index_high = int(np.deg2rad(270-25)/self.angle_increment)
-            index_low = int(np.deg2rad(270+25)/self.angle_increment)
-        elif door == 2:
-            index_high = int(np.deg2rad(90+25)/self.angle_increment)
-            index_low = int(np.deg2rad(90-25)/self.angle_increment)
-        else:
-            self.get_logger().error("door invalid!")
-            return None
+        target = 0.57 # target distance between doors
+        front_dist = self.lidar_ranges[0] # front facing
+        # front_dist = self.lidar_ranges[len(self.lidar_ranges) // 2] # if back facing
+        print(f'front_dist: {front_dist}')
         twist = Twist()
-        twist.linear.x = -speed
-        key_dist_high = self.lidar_ranges[index_high]
-        if np.isnan(key_dist_high):
-            key_dist_high = self.lidar_ranges[index_high-1]
-        key_dist_low = self.lidar_ranges[index_low]
-        if np.isnan(key_dist_low):
-            key_dist_low = self.lidar_ranges[index_low-1]
-        print((key_dist_high, key_dist_low))
         try:
-            while key_dist_high < 0.6 or key_dist_low < 0.6:
+            while True:
                 rclpy.spin_once(self)
-                key_dist_high = self.lidar_ranges[index_high]
-                if np.isnan(key_dist_high):
-                    key_dist_high = self.lidar_ranges[index_high-1]
-                key_dist_low = self.lidar_ranges[index_low]
-                if np.isnan(key_dist_low):
-                    key_dist_low = self.lidar_ranges[index_low-1]
-                print((key_dist_high, key_dist_low))
+                front_dist = self.lidar_ranges[0] # front facing
+                # front_dist = self.lidar_ranges[len(self.lidar_ranges) // 2] # if back facing
+                print(f'front_dist: {front_dist}')
+                if np.isnan(front_dist):
+                    continue
+                if abs(front_dist - target) < 0.03: # some threshold
+                    break
+                if front_dist - target > 0:
+                    twist.linear.x = speed
+                else:
+                    twist.linear.x = -speed
                 self.cmdvelpub.publish(twist)
         except KeyboardInterrupt:
             self.get_logger().info("KeyboardInterrupt!")
         stop_kill(self)
         return 1
 
-def door_mover(door, speed: float = 0.08):
+
+def door_mover(speed: float = 0.08):
     doormover = DoorMover()
-    doormover.move(door, speed)
+    doormover.move(speed)

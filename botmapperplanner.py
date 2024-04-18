@@ -95,7 +95,7 @@ class BotMapperPlannerParameters():
         '''
         Planner Parameters
         '''
-        self.wall_dilate_size = int((0.273 / 2) // self.resolution + 1)
+        self.wall_dilate_size = int((0.293 / 2) // self.resolution + 1)
         self.turning_cost = 7
 
 
@@ -272,12 +272,12 @@ class BotMapperPlanner(Node):
             self.params.height, self.params.width)
         self.params.costmap = self.create_costmap(
             raw_occ_2d,
-            dilate=int((0.273 / 2) // self.params.resolution + 1), # the higher this is, the further i avoid straight walls
+            # the higher this is, the further i avoid straight walls
+            dilate=int((0.273 / 2) // self.params.resolution + 1),
             inflation_radius=4,
             inflation_step=24,
             threshold=52,
             erode=6)
-        print(self.params.costmap)
 
         # create costmap message
         # now = rclpy.time.Time()
@@ -401,7 +401,7 @@ class BotMapperPlanner(Node):
                 return True
         return False
 
-    def get_goal(self, checked_goals: set):
+    def get_goal(self, checked_goals: set, lobby_coord: tuple = None):
         # self.params.goal_in_occ = tuple()
         # furthest_coord = 0
 
@@ -473,14 +473,32 @@ class BotMapperPlanner(Node):
         # filter possible goals with checked goals
         possible_goals = possible_goals - checked_goals
 
+        if lobby_coord:
+            lobby_coord_in_occ = self.map_to_occ(
+                self.map_coord_to_occ_origin(lobby_coord))
+            # filter possible goals with lobby_coord_in_occ (any less than or equal y position)
+
+            def in_maze(goal):
+                return goal[1] <= lobby_coord_in_occ[1]
+
+            possible_goals_copy = possible_goals.copy()
+            possible_goals = set(in_maze(goal)
+                                 for goal in possible_goals_copy if in_maze)
+
         if possible_goals == set():
             return furthest_goal, checked_goals
 
         # find largest y for any x
         for goal in possible_goals:
-            if goal[1] > furthest_goal[1]:
+            if not lobby_coord: # if still finding lobby
+                if goal[1] > furthest_goal[1]:
+                    furthest_goal = goal
+            
+            else:
                 furthest_goal = goal
+                
         checked_goals.add(furthest_goal)
+        
         return furthest_goal, checked_goals
 
     def get_robot(self):
@@ -500,22 +518,40 @@ class BotMapperPlanner(Node):
             except ExtrapolationException as e3:
                 self.get_logger().info('extrapolation')
 
+        # get pos in map and pos in occ
         self.params.pos_in_map = (
             tf.transform.translation.x, tf.transform.translation.y)
         self.params.pos_in_occ = self.map_to_occ(
             self.map_coord_to_occ_origin(self.params.pos_in_map))
 
+        temp_curr_pos = self.params.pos_in_occ
+        # check if robot is in occupied
+        is_in_occupied = self.occ_2d[int(temp_curr_pos[1])][int(
+            temp_curr_pos[0])] == self.params.occupied
+
+        if is_in_occupied:
+            unoccupied_indexes = np.transpose(np.nonzero(self.occ_2d == 2))
+            closest_dist = 999999
+            closest_pos = (0, 0)
+            for pos in unoccupied_indexes:
+                pos = (pos[1], pos[0])
+                calc_dist = self.heuristic(temp_curr_pos, pos)
+                if calc_dist < closest_dist:
+                    closest_dist = calc_dist
+                    closest_pos = pos
+
+            self.pos_in_occ = closest_pos
     '''
     Path Planning
     '''
+
+    def heuristic(self, curr_pos, next_pos):
+        (x1, y1) = curr_pos
+        (x2, y2) = next_pos
+        return round(math.sqrt(abs(x1 - x2)**2 + abs(y1 - y2)**2), 2)
+
     # a-star algorithm to find optimal path from start to goal
-
     def a_star_search(self, graph, start, goal):
-
-        def heuristic(curr_pos, next_pos):
-            (x1, y1) = curr_pos
-            (x2, y2) = next_pos
-            return 1.4 if abs(x1 - x2) and abs(y1 - y2) else 1  # sqrt(2)
 
         def cost_to_goal(curr_pos, goal):
             dist_x = abs(goal[0] - curr_pos[0])
@@ -594,30 +630,32 @@ class BotMapperPlanner(Node):
                 self.get_logger().info(f'Goal Found! : {goal}')
                 self.get_logger().info(f'End of waypoint: {final_pos}')
                 break
-    
+
             for next_pos in neighbors(curr_pos, graph):
-                new_cost = cost_so_far[curr_pos] + cost_to_goal(curr_pos, next_pos)
+                new_cost = cost_so_far[curr_pos] + \
+                    cost_to_goal(curr_pos, next_pos)
                 prev_pos = came_from[curr_pos]
                 if prev_pos != None:
                     # next_direction = (int(next[0] - current[0]), int(next[1] - current[1]))
                     # current_direction = (int(current[0] - prev[0]), int(current[1] - prev[1]))
-                    next_direction = (next_pos[0] - curr_pos[0], next_pos[1] - curr_pos[1])
-                    current_direction = (curr_pos[0] - prev_pos[0], curr_pos[1] - prev_pos[1])
-                    if  current_direction != next_direction:
-                        
-                        new_cost += turning_cost
-                        
-            
-                new_cost = round(new_cost,2)
-                
-                if next_pos not in cost_so_far or new_cost < round(cost_so_far[next_pos],2):
+                    next_direction = (
+                        next_pos[0] - curr_pos[0], next_pos[1] - curr_pos[1])
+                    current_direction = (
+                        curr_pos[0] - prev_pos[0], curr_pos[1] - prev_pos[1])
+                    if current_direction != next_direction:
 
-                    priority = new_cost + heuristic(goal, next_pos)
+                        new_cost += turning_cost
+
+                new_cost = round(new_cost, 2)
+
+                if next_pos not in cost_so_far or new_cost < round(cost_so_far[next_pos], 2):
+
+                    priority = new_cost + self.heuristic(goal, next_pos)
                     priority += self.params.costmap[next_pos[1]][next_pos[0]]
                     cost_so_far[next_pos] = new_cost
-                    waypoints.put((priority,next_pos))
+                    waypoints.put((priority, next_pos))
                     came_from[next_pos] = curr_pos
-                    
+
         return came_from, cost_so_far, final_pos
 
     def get_waypoints(self, path_array: list):  # path_array in rviz coord
@@ -777,7 +815,7 @@ class BotMapperPlanner(Node):
         #     '/goal_in_occ',
         #     10
         # )
-        
+
         '''
         Transforms
         '''
@@ -798,19 +836,23 @@ class BotMapperPlanner(Node):
         # process map data
         # self.flatten_layers()
         # self.reshape_layers()
-        
+
         self.costmap_data = np.array(msg.data)
-        
+
         # costmap data into 2d array
         self.params.costmap = self.costmap_data.copy()
-        self.params.costmap = self.params.costmap.reshape(self.params.height, self.params.width)
-        
+        self.params.costmap = self.params.costmap.reshape(
+            self.params.height, self.params.width)
+
         # occupancy data based on costmap
         self.occ_data = self.costmap_data.copy()
-        self.occ_data[self.costmap_data == -1] = self.params.unknown
-        self.occ_data[self.costmap_data >= 0] = self.params.unoccupied
+        self.occ_data[self.costmap_data == -
+                      1] = self.params.unknown  # assign unknown
+        self.occ_data[self.costmap_data >=
+                      0] = self.params.unoccupied  # assign unoccupied
+        # assign lethal obstacle
         self.occ_data[self.costmap_data == 100] = self.params.occupied
-        
+
         # occ_counts go from 1 to 3 so we can use uint8 (1 - Unknown, 2 - Unoccupied,, 3 - Occupied)
         # reshape into 2D
         self.occ_2d = np.uint8(self.occ_data.reshape(
@@ -824,13 +866,13 @@ class BotMapperPlanner(Node):
 
         # get robot position
         self.get_robot()  # get robot position
-        
+
         # publish to topics
         # self.publish_goal_in_map()
         # self.publish_goal_in_occ()
-        
+
         raise SystemExit  # exit node
-    
+
     # def goal_reached_callback(self, msg):
     #     if msg.data == 'goal_in_map reached':
     #         self.get_goal()
@@ -847,11 +889,12 @@ class BotMapperPlanner(Node):
         self.params.origin_x = msg.info.origin.position.x
         self.params.origin_y = msg.info.origin.position.y
 
+
 class LobbyCheck(BotMapperPlanner):
-    def __init__(self, lobby_map_coord=(1.8,2.7)):
+    def __init__(self, lobby_map_coord=(1.8, 2.7)):
         super().__init__("lobbycheck")
-        
-        self.quit = 0 # flag to quit search
+
+        self.quit = 0  # flag to quit search
         self.lobby_map_coord = lobby_map_coord
         self.subscription = self.create_subscription(
             OccupancyGrid,
@@ -864,16 +907,20 @@ class LobbyCheck(BotMapperPlanner):
         self.update_params(msg)
         occdata = np.array(msg.data)
         cdata = occdata.reshape(msg.info.height, msg.info.width)
-        cdata[cdata == 100] = -1
+        # cdata[cdata == 100] = -1
         cdata[cdata >= 0] = 1
         cdata[cdata == -1] = 0
-        no_wall_indexes = np.nonzero(cdata)
-        odata_lobby_coord = self.map_to_occ(self.map_coord_to_occ_origin(self.lobby_map_coord))
-        
-        if (odata_lobby_coord[0] in no_wall_indexes[1] and odata_lobby_coord[1] in no_wall_indexes[0]):
+        explored_indexes = np.nonzero(cdata)  # gives row, col -> y,x
+        odata_lobby_coord = self.map_to_occ(
+            self.map_coord_to_occ_origin(self.lobby_map_coord))
+
+        if (odata_lobby_coord[0]-3 in explored_indexes[1]
+            and odata_lobby_coord[0]+3 in explored_indexes[1]
+                and odata_lobby_coord[1]+5 in explored_indexes[0]):  # lobby is found when x is withing 3 cells a
             self.quit = 1
             print('found lobby, quit search')
-            
+
+
 def main(args=None):
     rclpy.init(args=args)
     mapperplanner = BotMapperPlanner()

@@ -25,8 +25,8 @@ from .lib.bucket_tools import move_to_bucket
 from .lib.servo_client import launch_servo
 
 # constants
-lobby_map_coord = (1.8,2.85) # supposed to be 2.8
-ipaddr = '192.168.xxx.xxx'
+lobby_map_coord = (1.8,2.63) # in between two doors
+ipaddr = '192.168.177.87'
 
 class BotBehaviorParameters():
     def __init__(self):
@@ -73,7 +73,7 @@ class BotBehavior(Node):
         
 
 
-def search_occ():
+def search_occ(lobby_coord=None):
     '''
     1. searches occupancy grid
     2. generates a path in map coordinates
@@ -96,16 +96,17 @@ def search_occ():
     rclpy.logging.get_logger('Goal Position').info(f'{goal_pos}')
 
     path_map = None
+    # path_wps = None
     while path_map is None:
         path_map = mapperplanner.get_path(curr_pos, goal_pos) # get a new path here, None if no path can be found
         goal_pos, checked_goals = mapperplanner.get_goal(checked_goals) # get a new goal here
         if goal_pos == (0, 0): # map fully explored
-            rclpy.logging_get_logger('Occupancy Grid').info(f'Fully explored')
+            rclpy.logging.get_logger('Occupancy Grid').info(f'Fully explored')
             return
     path_wps = mapperplanner.get_waypoints(path_map)
     return path_map, path_wps
 
-def path_to_door(goal_in_map=(1.8, 2.8)):
+def path_to_door(goal_in_map=lobby_map_coord):
     
     mapperplanner = BotMapperPlanner()
     
@@ -121,12 +122,13 @@ def path_to_door(goal_in_map=(1.8, 2.8)):
     goal_pos = mapperplanner.map_to_occ(mapperplanner.map_coord_to_occ_origin(goal_in_map))
 
     path_map = None
+    path_wps = None
     while path_map is None:
         path_map = mapperplanner.get_path(curr_pos, goal_pos) # get a new path here, None if no path can be found
         goal_pos, checked_goals = mapperplanner.get_goal(checked_goals) # get a new goal here
         if goal_pos == (0, 0): # map fully explored
             rclpy.logging_get_logger('Occupancy Grid').info(f'Fully explored')
-            return
+            return 'Done!' , 'place_holderer'
     path_wps = mapperplanner.get_waypoints(path_map)
     return path_map, path_wps
 
@@ -161,17 +163,18 @@ def main(args=None):
     lobbycheck = LobbyCheck()
     pathpub = PathPublisher()
     
-    # time_straight(-0.1, 14)
+    time_straight(-0.1, 14) # negative to move foward, positive to move backward
     # search for lobby by priortising furthest y coordinates
     for num_searches in range(20): # just to timeout the search eventually
         rclpy.logging.get_logger('Search Number').info(f'{num_searches}')
         path_map, path_wps = search_occ()
         start_time = time.time() # start time for search
-        pathpub.publish_path(path_map)
+        
+        pathpub.publish_path(path_map) # publish path to rviz
         for wps in path_wps:
             if lobbycheck.quit:
                 break
-            if (time.time() - start_time) > 5: # 20s to do new search based on new occupancy grid
+            if (time.time() - start_time) > 20: # 20s to do new search based on new occupancy grid
                 break
             print(f'current wp: {wps}')
             move_turn(wps)
@@ -191,45 +194,61 @@ def main(args=None):
             move_turn(wps)
             move_straight(wps)
     
-    # print('-----------------------http call!-----------------------')
-    # door = 0
-    # try:
-    #     door = open_door(ipaddr)
-    # except Exception as e:
-    #     print(e)
-    # while door == 0:
-    #     print('-----------------------request failed!-----------------------')
-    #     time.sleep(1)
-    #     try:
-    #         door = open_door(ipaddr)
-    #     except Exception as e:
-    #         print(e)
+    print('-----------------------http call!-----------------------')
+    door = 0
+    try:
+        door = open_door(ipaddr)
+    except Exception as e:
+        print(e)
+    while door == 0:
+        print('-----------------------request failed!-----------------------')
+        time.sleep(1)
+        try:
+            door = open_door(ipaddr)
+        except Exception as e:
+            print(e)
+    
     # door = 1
+    # door = 2
     
-    # print(f'-----------------------going to door {door}!-----------------------')
-    # # face front
-    # move_turn((get_curr_pos().x, get_curr_pos().y+5))
-    # door_mover()
-    # if door == 1:
-    #     turndeg = -5
-    # elif door == 2:
-    #     turndeg = 5
-    # move_turn((get_curr_pos().x, get_curr_pos().y+5)) # to refresh curr_pos after door_mover
-    # move_turn((get_curr_pos().x+turndeg, get_curr_pos().y))
-    # time_straight(0.15, 4)
+    print(f'-----------------------going to door {door}!-----------------------')
+    # face front
+    print ('turning to face front')
+    move_turn((get_curr_pos().x, get_curr_pos().y+5))
+    print('running door mover')
+    door_mover() # to move in between the doors
+    if door == 1:
+        turndeg = -5
+    elif door == 2:
+        turndeg = 5
+    move_turn((get_curr_pos().x, get_curr_pos().y+5)) # to refresh curr_pos after door_mover
+    move_turn((-get_curr_pos().x+turndeg, get_curr_pos().y)) # turn to door
+    time_straight(-0.05, 4) # enter the door!
     
-
-    # while(move_to_bucket(threshold=0.03, dist=0.17) is None):
-    #     time_straight(0.15, 2)
+    print(f'-----------------------finding bucket!-----------------------')
+    i = 0
+    while(move_to_bucket(threshold=0.02, dist=0.21) is None):
+        time_straight(-0.15, 2)
+        i += 1
+        if i == 3:
+            break
         
-    # print(f'-----------------------launching balls!-----------------------')
+    print(f'-----------------------launching balls!-----------------------')
     # launch_servo()
+    
+    print('-----------------------reversing!-----------------------')
+    # time_straight(0.15, 2)
     
     print('-----------------------finishing search!!!-----------------------')
     for num_searches in range(20): # just to timeout the search eventually
         rclpy.logging.get_logger('Search Number').info(f'{num_searches}')
-        path_wps = search_occ()
+        path_map , path_wps = search_occ(lobby_coord=lobby_map_coord)
         start_time = time.time() # start time for search
+        if path_map == 'Done!':
+            print(f'-----------------------done!-----------------------')
+            break
+        
+        pathpub.publish_path(path_map) # publish path to rviz
         for wps in path_wps:
             if (time.time() - start_time) > 20: # 20s to do new search based on new occupancy grid
                 break
@@ -243,3 +262,4 @@ def main(args=None):
     
 if __name__ == "__main__":
     main()
+    print(open_door(ipaddr))
