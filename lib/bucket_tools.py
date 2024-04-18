@@ -70,10 +70,12 @@ def check_bucket_lidar(
     if abs(lidar_ranges.size * angle_increment - 6.28) > 0.1:
         warnings.warn("lidar_ranges.size does not match angle_increment!!")
     for i in np.argsort(lidar_ranges):  # start checking from shortest
-        if (math.pi / 4) / angle_increment > i or i < (
-            7 * math.pi / 4
-        ) / angle_increment:
+        # if ((math.pi / 4) + (math.pi / 4)) / angle_increment < i or i < ((7 * math.pi / 4) + (math.pi / 4)) / angle_increment:
+        if (7 * math.pi / 4) / angle_increment < i or i >  (math.pi / 2) / angle_increment:
             # print("out of range, selected point is behind robot")
+        # if (math.pi / 4) / angle_increment < i or i < (
+        #     7 * math.pi / 4
+        # ) / angle_increment:
             continue
         distance = lidar_ranges[i]
         theta: math.radians = math.asin(bucket_radius / (bucket_radius + distance))

@@ -2,7 +2,7 @@ import requests
 
 def open_door(ESP_IP:str):
     url = 'http://'+ESP_IP+'/openDoor'
-    myobj = {"action": "openDoor", "parameters": {"robotId": "42"}}
+    myobj = {"action": "openDoor", "parameters": {"robotId": "36"}}
     response = requests.post(url, json = myobj)
     print(response.json())
     if response.status_code == 400:
@@ -14,7 +14,7 @@ def open_door(ESP_IP:str):
     # TODO: catch timeout / problem, then manual input
 
 def main(args=None):
-    print(open_door("192.168.67.199"))
+    print(open_door("192.168.177.216"))
 
 if __name__ == "__main__":
     main()

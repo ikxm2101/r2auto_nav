@@ -95,7 +95,7 @@ class BotMapperPlannerParameters():
         '''
         Planner Parameters
         '''
-        self.wall_dilate_size = int((0.293 / 2) // self.resolution + 1)
+        self.wall_dilate_size = int((0.200 / 2) // self.resolution + 1)
         self.turning_cost = 7
 
 
