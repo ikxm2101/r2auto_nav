@@ -12,7 +12,7 @@ from .quat_tools import (
     quaternion_from_euler,
     euler_from_quaternion,
 )
-from ..botcontroller import stop_kill
+from ..controller import stop_kill
 
 
 class TimeStraight(Node):

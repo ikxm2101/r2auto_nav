@@ -14,7 +14,7 @@ from .quat_tools import (
     quaternion_from_euler,
     quaternion_multiply,
 )
-from ..botcontroller import move_straight, move_turn
+from ..controller import move_straight, move_turn
 
 
 def check_bucket(

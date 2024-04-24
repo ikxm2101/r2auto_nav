@@ -5,7 +5,7 @@ from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import LaserScan
 from geometry_msgs.msg import Twist
-from ..botcontroller import stop_kill
+from ..controller import stop_kill
 
 
 class DoorMover(Node):

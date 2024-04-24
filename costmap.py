@@ -45,7 +45,7 @@ def inflate(src: np.ndarray, dilate=2, threshold=40, inflation_radius=4, inflati
     array_inflated[wall_indexes] = 100
     return array_inflated
 
-class BotCostmap(Node):
+class Costmap(Node):
     def __init__(self):
         super().__init__("costmap_pub")
         self.subscription = self.create_subscription(
@@ -77,7 +77,7 @@ class BotCostmap(Node):
 def main(args=None):
     rclpy.init(args=args)
 
-    costmap = BotCostmap()
+    costmap = Costmap()
     rclpy.spin(costmap)
 
     costmap.destroy_node()

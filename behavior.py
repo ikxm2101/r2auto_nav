@@ -14,8 +14,8 @@ import time
 import numpy as np
 
 # nodes for navigation
-from .botmapperplanner import BotMapperPlanner, LobbyCheck
-from .botcontroller import move_straight, move_turn, get_curr_pos
+from .mapperplanner import MapperPlanner, LobbyCheck
+from .controller import move_straight, move_turn, get_curr_pos
 
 # libs for mission tasks
 from .lib.open_door import open_door
@@ -28,7 +28,7 @@ from .lib.servo_client import launch_servo
 lobby_map_coord = (1.8,2.63) # in between two doors
 ipaddr = '192.168.177.87'
 
-class BotBehaviorParameters():
+class BehaviorParameters():
     def __init__(self):
         self.curr_state = None
         self.states = {
@@ -40,10 +40,10 @@ class BotBehaviorParameters():
 
         self.costmap = np.array([])
         
-class BotBehavior(Node):
+class Behavior(Node):
     def __init__(self, name='behavior'):
         super().__init__(name)
-        self.params = BotBehaviorParameters()
+        self.params = BehaviorParameters()
         self.init_topics()
     
     '''
@@ -63,15 +63,6 @@ class BotBehavior(Node):
             qos_profile_sensor_data
         )
         self.costmap_subscription  # prevent unused variable warning
-    
-    # '''
-    # Callbacks and Updates
-    # '''
-    # def costmap_callback(self, msg):
-    #     self.params.costmap = np.array(msg.data).reshape(
-    #     msg.info.height, msg.info.width)
-        
-
 
 def search_occ(lobby_coord=None):
     '''
@@ -79,7 +70,7 @@ def search_occ(lobby_coord=None):
     2. generates a path in map coordinates
     3. returns wps for vertices
     '''
-    mapperplanner = BotMapperPlanner()
+    mapperplanner = MapperPlanner()
     
     try:
         rclpy.spin(mapperplanner)
@@ -107,7 +98,7 @@ def search_occ(lobby_coord=None):
 
 def path_to_door(goal_in_map=lobby_map_coord):
     
-    mapperplanner = BotMapperPlanner()
+    mapperplanner = MapperPlanner()
     
     try:
         rclpy.spin(mapperplanner)
@@ -126,7 +117,7 @@ def path_to_door(goal_in_map=lobby_map_coord):
         goal_pos, checked_goals = mapperplanner.get_goal(checked_goals) # get a new goal here
         if goal_pos == (0, 0): # map fully explored
             rclpy.logging_get_logger('Occupancy Grid').info(f'Fully explored')
-            return 'Done!' , 'place_holderer'
+            return 'Done!' , 'placeholder'
     path_wps = mapperplanner.get_waypoints(path_map)
     return path_map, path_wps
 
@@ -157,9 +148,9 @@ class PathPublisher(Node):
 def main(args=None):
 
     rclpy.init(args=args)
-    # lobby check node
+    
     lobbycheck = LobbyCheck()
-    pathpub = PathPublisher()
+    pathpub = PathPublisher() # lobby check node
     
     time_straight(-0.1, 14) # negative to move foward, positive to move backward
     # search for lobby by priortising furthest y coordinates
@@ -183,55 +174,55 @@ def main(args=None):
             print('can see lobby')
             break
     
-    # print('-----------------------to lobby!-----------------------')  
-    # for _ in range(2): # run twice to confirm its at the lobby coordinates, as path_to_door() allows for some margin of error
-    #     path_map, path_wps = path_to_door(goal_in_map=lobby_map_coord)
-    #     for wps in path_wps:
-    #         # print(x)
-    #         print(f'current wp: {wps}')
-    #         move_turn(wps)
-    #         move_straight(wps)
+    print('-----------------------to lobby!-----------------------')  
+    for _ in range(2): # run twice to confirm its at the lobby coordinates, as path_to_door() allows for some margin of error
+        path_map, path_wps = path_to_door(goal_in_map=lobby_map_coord)
+        for wps in path_wps:
+            # print(x)
+            print(f'current wp: {wps}')
+            move_turn(wps)
+            move_straight(wps)
     
-    # # print('-----------------------http call!-----------------------')
-    # door = 0
-    # try:
-    #     door = open_door(ipaddr)
-    # except Exception as e:
-    #     print(e)
-    # while door == 0:
-    #     print('-----------------------request failed!-----------------------')
-    #     time.sleep(1)
-    #     try:
-    #         door = open_door(ipaddr)
-    #     except Exception as e:
-    #         print(e)
+    # print('-----------------------http call!-----------------------')
+    door = 0
+    try:
+        door = open_door(ipaddr)
+    except Exception as e:
+        print(e)
+    while door == 0:
+        print('-----------------------request failed!-----------------------')
+        time.sleep(1)
+        try:
+            door = open_door(ipaddr)
+        except Exception as e:
+            print(e)
     
-    # # door = 1
-    # # door = 2
+    # door = 1
+    # door = 2
     
-    # # print(f'-----------------------going to door {door}!-----------------------')
-    # # face front
-    # print ('turning to face front')
-    # move_turn((get_curr_pos().x, get_curr_pos().y+5))
-    # print('running door mover')
-    # door_mover() # to move in between the doors
-    # if door == 1:
-    #     turndeg = -5
-    # elif door == 2:
-    #     turndeg = 5
-    # move_turn((get_curr_pos().x, get_curr_pos().y+5)) # to refresh curr_pos after door_mover
-    # move_turn((-get_curr_pos().x+turndeg, get_curr_pos().y)) # turn to door
-    # time_straight(-0.05, 4) # enter the door!
+    # print(f'-----------------------going to door {door}!-----------------------')
+    # face front
+    print ('turning to face front')
+    move_turn((get_curr_pos().x, get_curr_pos().y+5))
+    print('running door mover')
+    door_mover() # to move in between the doors
+    if door == 1:
+        turndeg = -5
+    elif door == 2:
+        turndeg = 5
+    move_turn((get_curr_pos().x, get_curr_pos().y+5)) # to refresh curr_pos after door_mover
+    move_turn((-get_curr_pos().x+turndeg, get_curr_pos().y)) # turn to door
+    time_straight(-0.05, 4) # enter the door!
     
-    # # print(f'-----------------------finding bucket!-----------------------')
-    # while(move_to_bucket(threshold=0.04, dist=0.21) is None):
-    #     time_straight(-0.15, 2)
+    # print(f'-----------------------finding bucket!-----------------------')
+    while(move_to_bucket(threshold=0.04, dist=0.21) is None):
+        time_straight(-0.15, 2)
         
-    # # print(f'-----------------------launching balls!-----------------------')
-    # launch_servo()
+    # print(f'-----------------------launching balls!-----------------------')
+    launch_servo()
     
-    # # print('-----------------------reversing!-----------------------')
-    # time_straight(0.15, 2)
+    # print('-----------------------reversing!-----------------------')
+    time_straight(0.15, 2)
     
     # # print('-----------------------finishing search!!!-----------------------')
     for num_searches in range(20): # just to timeout the search eventually
@@ -251,10 +242,10 @@ def main(args=None):
             move_straight(wps, linear_speed_limit=0.2, angular_speed_limit=2)
     print(f'-----------------------done!-----------------------')
     
-    print('--------------------------white flag---------------------------')
-    # time_straight(-0.1, 10)
+    # print('--------------------------white flag---------------------------')
+    # time_straight(-0.1, 10) # to move forward to the lobby
     
-    # mapperplanner = BotMapperPlanner()
+    # mapperplanner = MapperPlanner()
 
     # try:
     #     rclpy.spin(mapperplanner)
@@ -288,13 +279,13 @@ def main(args=None):
     # move_turn((-curr_pos.x+turndeg, curr_pos.y+5)) # turn to door
     # time_straight(-0.05, 4) # enter the door!
     
-    while(move_to_bucket(threshold=0.04, dist=0.21) is None):
-        time_straight(-0.15, 2)
+    # while(move_to_bucket(threshold=0.02, dist=0.21) is None):
+    #     time_straight(-0.15, 2)
         
-    # print(f'-----------------------launching balls!-----------------------')
-    launch_servo()
+    # # print(f'-----------------------launching balls!-----------------------')
+    # launch_servo()
     
-    rclpy.shutdown()
+    # rclpy.shutdown()
     
 if __name__ == "__main__":
     main()
