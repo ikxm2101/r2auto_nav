@@ -447,7 +447,17 @@ class MapperPlanner(Node):
         '''
         Publishers
         '''
+        self.goal_in_map_publisher = self.create_publisher(
+            PoseStamped,
+            '/goal_in_map',
+            10
+        )
 
+        self.goal_in_occ_publisher = self.create_publisher(
+            PoseStamped,
+            '/goal_in_occ',
+            10
+        )
         '''
         Transforms
         '''
